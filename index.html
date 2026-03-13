@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Lung Hero - 3D</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui-layer">
+        <div id="stats-panel">
+            <h2>SCORE: <span id="score">0</span></h2>
+            <div class="bar-label">OXYGEN CAPACITY</div>
+            <div id="oxy-bar-bg"><div id="oxy-bar"></div></div>
+        </div>
+    </div>
+
+    <div id="minimap-container">
+        <div class="map-marker N">N</div>
+    </div>
+
+    <div id="sensor-ui">
+        <div class="labels">
+            <span class="inhale">⬅ INHALE</span>
+            <span class="exhale">EXHALE ➡</span>
+        </div>
+        <input type="range" id="breath-slider" min="-100" max="100" value="0">
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
