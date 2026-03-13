@@ -1,51 +1,55 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class GameEngine {
     constructor() {
+        // --- 1. SCENE SETUP ---
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB); 
-        this.scene.fog = new THREE.Fog(0x87CEEB, 40, 300); // Fortnite atmospheric fog
+        this.scene.fog = new THREE.Fog(0x87CEEB, 40, 300); 
 
         this.clock = new THREE.Clock();
 
-        // Main Camera
+        // --- 2. CAMERAS ---
         this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // Minimap Camera (Looking down)
         const mapSize = 150; 
         this.minimapCamera = new THREE.OrthographicCamera(mapSize / -2, mapSize / 2, mapSize / 2, mapSize / -2, 1, 1000);
         this.scene.add(this.minimapCamera);
 
-        // 1. Main Fullscreen Renderer
+        // --- 3. RENDERERS ---
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
         document.body.appendChild(this.renderer.domElement);
 
-        // 2. Dedicated Minimap Renderer (Injects into the CSS circle)
         this.mapRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.mapRenderer.setSize(220, 220); // Matches CSS width/height
+        this.mapRenderer.setSize(220, 220); 
         document.getElementById('minimap-container').appendChild(this.mapRenderer.domElement);
 
-        // Game State
+        // --- 4. GAME STATE ---
         this.obstacles = [];
         this.boat = new THREE.Group(); 
         this.goalZ = -600; 
         this.isGameOver = false;
+        
+        // --- 5. ASSET MANAGEMENT ---
+        this.loadedModels = {};
+        this.gltfLoader = new GLTFLoader();
 
         this.initLighting();
-        this.buildWorld(); // Guaranteed to load instantly
+        this.buildBaseEnvironment(); // Builds water/ground immediately
+        this.preloadAssets();        // Starts downloading your .glb files
     }
 
     initLighting() {
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambientLight);
 
         const sunLight = new THREE.DirectionalLight(0xfffaeb, 1.2); 
         sunLight.position.set(100, 200, 50);
         sunLight.castShadow = true;
-        
         sunLight.shadow.mapSize.width = 2048;
         sunLight.shadow.mapSize.height = 2048;
         sunLight.shadow.camera.near = 0.5;
@@ -57,8 +61,8 @@ export class GameEngine {
         this.scene.add(sunLight);
     }
 
-    buildWorld() {
-        // --- RIVER ---
+    buildBaseEnvironment() {
+        // Water
         const waterMat = new THREE.MeshStandardMaterial({ color: 0x1ca3ec, roughness: 0.1, flatShading: true });
         const water = new THREE.Mesh(new THREE.PlaneGeometry(60, 1500), waterMat);
         water.rotation.x = -Math.PI / 2;
@@ -66,8 +70,8 @@ export class GameEngine {
         water.receiveShadow = true;
         this.scene.add(water);
 
-        // --- BANKS ---
-        const bankMat = new THREE.MeshStandardMaterial({ color: 0x7cfc00, roughness: 0.9, flatShading: true });
+        // Banks (Sand/Grass color)
+        const bankMat = new THREE.MeshStandardMaterial({ color: 0xedc9af, roughness: 0.9, flatShading: true }); 
         
         const rightBank = new THREE.Mesh(new THREE.PlaneGeometry(200, 1500), bankMat);
         rightBank.rotation.x = -Math.PI / 2;
@@ -80,74 +84,111 @@ export class GameEngine {
         leftBank.position.set(-130, 0.2, -500);
         leftBank.receiveShadow = true;
         this.scene.add(leftBank);
+        
+        this.scene.add(this.boat);
+    }
 
-        // --- TREES & STRUCTURES (Stylized Generation) ---
-        const treeGeo = new THREE.ConeGeometry(3, 10, 5);
-        const trunkGeo = new THREE.CylinderGeometry(0.8, 0.8, 3, 5);
-        const treeMat = new THREE.MeshStandardMaterial({ color: 0x2e8b57, flatShading: true });
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, flatShading: true });
+    preloadAssets() {
+        // The exact files we need to load
+        const filesToLoad = [
+            { id: 'boat', file: 'boat-row-small.glb' },
+            { id: 'tower', file: 'tower-watch.glb' },
+            { id: 'palm', file: 'palm-detailed-straight.glb' },
+            { id: 'grass', file: 'grass-patch.glb' },
+            { id: 'dock', file: 'structure-platform-dock.glb' },
+            { id: 'barrel', file: 'barrel.glb' }
+        ];
 
-        const houseGeo = new THREE.BoxGeometry(8, 8, 8);
-        const roofGeo = new THREE.ConeGeometry(7, 5, 4);
-        const houseMat = new THREE.MeshStandardMaterial({ color: 0xffe4c4, flatShading: true });
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0xcd5c5c, flatShading: true });
+        let loadedCount = 0;
 
-        for (let i = 0; i < 80; i++) {
-            const isTree = Math.random() > 0.2; // 80% trees, 20% houses
-            const group = new THREE.Group();
+        filesToLoad.forEach(item => {
+            this.gltfLoader.load(
+                `assets/models/${item.file}`, 
+                (gltf) => {
+                    const model = gltf.scene;
+                    
+                    // Ensure the model casts shadows
+                    model.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
 
-            if (isTree) {
-                const leaves = new THREE.Mesh(treeGeo, treeMat);
-                leaves.position.y = 6;
-                leaves.castShadow = true;
-                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-                trunk.position.y = 1.5;
-                trunk.castShadow = true;
-                group.add(leaves, trunk);
+                    this.loadedModels[item.id] = model;
+                    loadedCount++;
+                    console.log(`✅ Loaded: ${item.file}`);
+
+                    // Build the world once everything is downloaded
+                    if (loadedCount === filesToLoad.length) {
+                        this.populateWorldWithGLBs();
+                    }
+                }, 
+                undefined, 
+                (error) => {
+                    console.error(`❌ ERROR: Could not load assets/models/${item.file}`, error);
+                }
+            );
+        });
+    }
+
+    populateWorldWithGLBs() {
+        // --- 1. THE PLAYER BOAT ---
+        const playerBoat = this.loadedModels['boat'].clone();
+        playerBoat.scale.set(4, 4, 4); // Scaled up so it's visible
+        playerBoat.position.y = 0.5;   // Keep it above water
+        playerBoat.rotation.y = Math.PI; // Face forward
+        this.boat.add(playerBoat);
+
+        // --- 2. RIGHT BANK SCENERY (Attractive setup) ---
+        for (let i = 0; i < 45; i++) {
+            const zPos = -Math.random() * 800;
+            const randomPick = Math.random();
+            let prop;
+
+            if (randomPick < 0.3) {
+                // Watchtowers
+                prop = this.loadedModels['tower'].clone();
+                prop.scale.set(3, 3, 3);
+                prop.position.set(45 + Math.random() * 20, 0, zPos);
+            } else if (randomPick < 0.6) {
+                // Palm Trees
+                prop = this.loadedModels['palm'].clone();
+                prop.scale.set(3.5, 3.5, 3.5);
+                prop.position.set(35 + Math.random() * 20, 0, zPos);
+            } else if (randomPick < 0.8) {
+                // Grass patches
+                prop = this.loadedModels['grass'].clone();
+                prop.scale.set(5, 5, 5);
+                prop.position.set(35 + Math.random() * 30, 0, zPos);
             } else {
-                const base = new THREE.Mesh(houseGeo, houseMat);
-                base.position.y = 4;
-                base.castShadow = true;
-                const roof = new THREE.Mesh(roofGeo, roofMat);
-                roof.position.y = 10.5;
-                roof.rotation.y = Math.PI / 4;
-                roof.castShadow = true;
-                group.add(base, roof);
+                // Docks on the water's edge
+                prop = this.loadedModels['dock'].clone();
+                prop.scale.set(3, 3, 3);
+                prop.position.set(28, 0.5, zPos); 
             }
 
-            const isRight = Math.random() > 0.5;
-            const xOffset = isRight ? (40 + Math.random() * 60) : (-40 - Math.random() * 60);
-            group.position.set(xOffset, 0, -Math.random() * 1000);
-            
-            // Random scaling for variety
-            const scale = 0.8 + Math.random() * 0.5;
-            group.scale.set(scale, scale, scale);
-            this.scene.add(group);
+            prop.rotation.y = Math.random() * Math.PI * 2;
+            this.scene.add(prop);
         }
 
-        // --- BOAT & HERO ---
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 6), new THREE.MeshStandardMaterial({ color: 0xcd853f }));
-        hull.position.y = 0.75;
-        hull.castShadow = true;
-        
-        const hero = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshStandardMaterial({ color: 0xe74c3c }));
-        hero.position.set(0, 2.5, -1);
-        hero.castShadow = true;
+        // --- 3. LEFT BANK SCENERY (Mostly nature to balance) ---
+        for (let i = 0; i < 30; i++) {
+            const zPos = -Math.random() * 800;
+            const prop = Math.random() > 0.5 ? this.loadedModels['palm'].clone() : this.loadedModels['grass'].clone();
+            prop.scale.set(3.5, 3.5, 3.5);
+            prop.position.set(-35 - Math.random() * 30, 0, zPos);
+            prop.rotation.y = Math.random() * Math.PI * 2;
+            this.scene.add(prop);
+        }
 
-        this.boat.add(hull, hero);
-        this.boat.position.set(0, 0, 0);
-        this.scene.add(this.boat);
-
-        // --- OBSTACLES ---
-        const obsGeo = new THREE.BoxGeometry(4, 4, 4); 
-        const obsMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, flatShading: true });
-        
+        // --- 4. OBSTACLES (Barrels) ---
         for (let z = -80; z >= this.goalZ; z -= 80) {
-            const obs = new THREE.Mesh(obsGeo, obsMat);
-            obs.position.set((Math.random() - 0.5) * 20, 2, z); 
-            obs.castShadow = true;
-            this.scene.add(obs);
-            this.obstacles.push(obs);
+            const barrel = this.loadedModels['barrel'].clone();
+            barrel.scale.set(4, 4, 4); 
+            barrel.position.set((Math.random() - 0.5) * 20, 0, z); 
+            this.scene.add(barrel);
+            this.obstacles.push(barrel);
         }
     }
 
@@ -160,7 +201,8 @@ export class GameEngine {
     update(sensorValue, oxygen, onScoreUpdate) {
         const time = this.clock.getElapsedTime() * 1000;
 
-        if (!this.isGameOver) {
+        // Only run game logic if the boat model has actually loaded
+        if (!this.isGameOver && this.boat.children.length > 0) { 
             // Breathing Mechanics
             if (sensorValue > 0 && oxygen > 0) {
                 oxygen = Math.max(0, oxygen - (sensorValue * 0.01));
@@ -169,12 +211,12 @@ export class GameEngine {
                 oxygen = Math.min(100, oxygen + (Math.abs(sensorValue) * 0.02));
             }
 
-            // Boat Physics
+            // Boat bobbing physics
             this.boat.position.y = Math.sin(time * 0.002) * 0.2;
             this.boat.rotation.z = Math.cos(time * 0.001) * 0.03;
             this.boat.rotation.x = Math.sin(time * 0.0015) * 0.03;
 
-            // Collision Check
+            // Collision Check with Barrels
             for (let i = this.obstacles.length - 1; i >= 0; i--) {
                 const obs = this.obstacles[i];
                 const dist = Math.sqrt(Math.pow(this.boat.position.x - obs.position.x, 2) + Math.pow(this.boat.position.z - obs.position.z, 2));
