@@ -243,10 +243,11 @@ export class GameEngine {
         this.minimapCamera.position.set(this.boat.position.x, 100, this.boat.position.z);
         this.minimapCamera.lookAt(this.boat.position.x, 0, this.boat.position.z);
 
-        // Render both views
+         // both view will be rendered...on screen
         this.renderer.render(this.scene, this.camera);
         this.mapRenderer.render(this.scene, this.minimapCamera);
         
+
         return { newOxygen: oxygen };
     }
 }
