@@ -186,9 +186,12 @@ export class GameEngine {
         for (let z = -80; z >= this.goalZ; z -= 80) {
             const barrel = this.loadedModels['barrel'].clone();
             barrel.scale.set(4, 4, 4); 
+
             barrel.position.set((Math.random() - 0.5) * 20, 0, z); 
             this.scene.add(barrel);
+            
             this.obstacles.push(barrel);
+
         }
     }
 
