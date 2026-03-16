@@ -3,38 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Lung Hero - 3D</title>
-    <link rel="stylesheet" href="styles.css">
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
+    <title>Super Lung Hero - UI Fix</title>
+    <style>
+        /* --- CSS RESET & FONTS --- */
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
+        body { margin: 0; overflow: hidden; font-family: 'Montserrat', sans-serif; background-color: #87CEEB; }
+        
+        /* 🚨 CRITICAL FIX: The 3D Canvas MUST stay in the back */
+        #game-canvas { position: absolute; top: 0; left: 0; z-index: 1; width: 100vw; height: 100vh; }
+
+        /* --- MAIN MENU --- */
+        #main-menu {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px);
+            z-index: 200; transition: opacity 0.5s ease;
         }
-    </script>
+        .menu-box {
+            background: rgba(20, 30, 48, 0.9); padding: 50px; border-radius: 15px;
+            text-align: center; color: white; border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        }
+        .menu-box h1 { color: #f1c40f; margin: 0 0 10px 0; font-size: 40px; }
+        .menu-box button {
+            width: 100%; padding: 15px; margin-top: 20px; font-size: 20px; font-weight: bold;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5); color: white;
+            border: none; border-radius: 10px; cursor: pointer;
+        }
+
+        /* --- IN-GAME HUD --- */
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; display: none; pointer-events: none; }
+        
+        #stats-panel {
+            position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7);
+            padding: 15px; border-radius: 10px; color: white; backdrop-filter: blur(5px);
+        }
+        #oxy-bar-bg { width: 200px; height: 20px; background: #333; border: 2px solid white; border-radius: 5px; }
+        #oxy-bar { width: 0%; height: 100%; background: cyan; transition: width 0.1s; }
+
+        #sensor-ui {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.9); padding: 15px 30px; border-radius: 20px;
+            width: 300px; text-align: center; pointer-events: auto; /* Re-enable clicks for slider */
+        }
+        #breath-slider { width: 100%; cursor: pointer; }
+    </style>
 </head>
 <body>
-    <div id="ui-layer">
+
+    <canvas id="game-canvas"></canvas>
+
+    <div id="main-menu">
+        <div class="menu-box">
+            <h1>SUPER LUNG HERO</h1>
+            <p>Digital Rehab Prototype</p>
+            <button id="btn-play">START MISSION</button>
+        </div>
+    </div>
+
+    <div id="game-ui">
         <div id="stats-panel">
-            <h2>SCORE: <span id="score">0</span></h2>
-            <div class="bar-label">OXYGEN CAPACITY</div>
+            <h2 style="margin:0 0 10px 0; color:#f1c40f;">SCORE: <span id="score">0</span></h2>
             <div id="oxy-bar-bg"><div id="oxy-bar"></div></div>
         </div>
-    </div>
-
-    <div id="minimap-container">
-        <div class="map-marker N">N</div>
-    </div>
-
-    <div id="sensor-ui">
-        <div class="labels">
-            <span class="inhale">⬅ INHALE</span>
-            <span class="exhale">EXHALE ➡</span>
+        <div id="sensor-ui">
+            <div style="display:flex; justify-content:space-between; font-weight:bold; color:#333; margin-bottom:10px;">
+                <span style="color:#3498db;">⬅ INHALE</span><span style="color:#e74c3c;">EXHALE ➡</span>
+            </div>
+            <input type="range" id="breath-slider" min="-100" max="100" value="0">
         </div>
-        <input type="range" id="breath-slider" min="-100" max="100" value="0">
     </div>
 
-    <script type="module" src="main.js"></script>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // State
+        let gameState = 'MENU';
+        let oxygen = 0;
+        let score = 0;
+
+        // DOM
+        const mainMenu = document.getElementById('main-menu');
+        const gameUI = document.getElementById('game-ui');
+        const btnPlay = document.getElementById('btn-play');
+        const slider = document.getElementById('breath-slider');
+        const oxyBar = document.getElementById('oxy-bar');
+
+        // Three.js Setup
+        const canvas = document.getElementById('game-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const clock = new THREE.Clock();
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const sun = new THREE.DirectionalLight(0xffffff, 1);
+        sun.position.set(50, 100, 50);
+        scene.add(sun);
+
+        // Environment (Using basic shapes for safety)
+        const water = new THREE.Mesh(new THREE.PlaneGeometry(60, 1000), new THREE.MeshStandardMaterial({ color: 0x1ca3ec }));
+        water.rotation.x = -Math.PI / 2;
+        scene.add(water);
+
+        // Player Boat Placeholder
+        const boat = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 6), new THREE.MeshStandardMaterial({ color: 0x8b4513 }));
+        boat.position.y = 0.5;
+        scene.add(boat);
+
+        // UI Listeners
+        btnPlay.addEventListener('click', () => {
+            mainMenu.style.opacity = '0';
+            setTimeout(() => {
+                mainMenu.style.display = 'none';
+                gameUI.style.display = 'block';
+                gameState = 'PLAYING';
+            }, 500);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Game Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            const sensorVal = parseInt(slider.value);
+
+            // Boat Bobbing
+            boat.position.y = Math.sin(time * 2) * 0.2 + 0.5;
+
+            if (gameState === 'MENU') {
+                // Cinematic rotation
+                camera.position.set(Math.sin(time * 0.5) * 20, 10, Math.cos(time * 0.5) * 20);
+                camera.lookAt(boat.position);
+            } 
+            else if (gameState === 'PLAYING') {
+                // Mechanics
+                if (sensorVal > 0 && oxygen > 0) {
+                    oxygen -= sensorVal * 0.01;
+                    boat.position.z -= sensorVal * 0.02;
+                } else if (sensorVal < 0) {
+                    oxygen = Math.min(100, oxygen + Math.abs(sensorVal) * 0.02);
+                }
+                
+                oxyBar.style.width = `${oxygen}%`;
+                
+                // Slider spring-back
+                if (Math.abs(sensorVal) > 0) slider.value = sensorVal > 0 ? sensorVal - 1 : sensorVal + 1;
+
+                // Chase Camera
+                const idealPos = new THREE.Vector3(0, 8, 20).add(boat.position);
+                camera.position.lerp(idealPos, 0.1);
+                camera.lookAt(boat.position);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
 </body>
 </html>

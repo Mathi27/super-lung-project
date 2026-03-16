@@ -34,13 +34,16 @@ export class GameEngine {
         this.goalZ = -600; 
         this.isGameOver = false;
         
+        // 🚨 ADDED: Tell the engine it starts in Menu Mode
+        this.gameState = 'MENU'; 
+        
         // --- 5. ASSET MANAGEMENT ---
         this.loadedModels = {};
         this.gltfLoader = new GLTFLoader();
 
         this.initLighting();
-        this.buildBaseEnvironment(); // Builds water/ground immediately
-        this.preloadAssets();        // Starts downloading your .glb files
+        this.buildBaseEnvironment(); 
+        this.preloadAssets();        
     }
 
     initLighting() {
@@ -62,7 +65,6 @@ export class GameEngine {
     }
 
     buildBaseEnvironment() {
-        // Water
         const waterMat = new THREE.MeshStandardMaterial({ color: 0x1ca3ec, roughness: 0.1, flatShading: true });
         const water = new THREE.Mesh(new THREE.PlaneGeometry(60, 1500), waterMat);
         water.rotation.x = -Math.PI / 2;
@@ -70,7 +72,6 @@ export class GameEngine {
         water.receiveShadow = true;
         this.scene.add(water);
 
-        // Banks (Sand/Grass color)
         const bankMat = new THREE.MeshStandardMaterial({ color: 0xedc9af, roughness: 0.9, flatShading: true }); 
         
         const rightBank = new THREE.Mesh(new THREE.PlaneGeometry(200, 1500), bankMat);
@@ -89,7 +90,6 @@ export class GameEngine {
     }
 
     preloadAssets() {
-        // The exact files we need to load
         const filesToLoad = [
             { id: 'boat', file: 'boat-row-small.glb' },
             { id: 'tower', file: 'tower-watch.glb' },
@@ -103,11 +103,9 @@ export class GameEngine {
 
         filesToLoad.forEach(item => {
             this.gltfLoader.load(
-                `assets/models/${item.file}`, 
+                `./assets/models/${item.file}`, 
                 (gltf) => {
                     const model = gltf.scene;
-                    
-                    // Ensure the model casts shadows
                     model.traverse((child) => {
                         if (child.isMesh) {
                             child.castShadow = true;
@@ -119,7 +117,6 @@ export class GameEngine {
                     loadedCount++;
                     console.log(`✅ Loaded: ${item.file}`);
 
-                    // Build the world once everything is downloaded
                     if (loadedCount === filesToLoad.length) {
                         this.populateWorldWithGLBs();
                     }
@@ -133,36 +130,30 @@ export class GameEngine {
     }
 
     populateWorldWithGLBs() {
-        // --- 1. THE PLAYER BOAT ---
         const playerBoat = this.loadedModels['boat'].clone();
-        playerBoat.scale.set(4, 4, 4); // Scaled up so it's visible
-        playerBoat.position.y = 0.5;   // Keep it above water
-        playerBoat.rotation.y = Math.PI; // Face forward
+        playerBoat.scale.set(4, 4, 4); 
+        playerBoat.position.y = 0.5;   
+        playerBoat.rotation.y = Math.PI; 
         this.boat.add(playerBoat);
 
-        // --- 2. RIGHT BANK SCENERY (Attractive setup) ---
         for (let i = 0; i < 45; i++) {
             const zPos = -Math.random() * 800;
             const randomPick = Math.random();
             let prop;
 
             if (randomPick < 0.3) {
-                // Watchtowers
                 prop = this.loadedModels['tower'].clone();
                 prop.scale.set(3, 3, 3);
                 prop.position.set(45 + Math.random() * 20, 0, zPos);
             } else if (randomPick < 0.6) {
-                // Palm Trees
                 prop = this.loadedModels['palm'].clone();
                 prop.scale.set(3.5, 3.5, 3.5);
                 prop.position.set(35 + Math.random() * 20, 0, zPos);
             } else if (randomPick < 0.8) {
-                // Grass patches
                 prop = this.loadedModels['grass'].clone();
                 prop.scale.set(5, 5, 5);
                 prop.position.set(35 + Math.random() * 30, 0, zPos);
             } else {
-                // Docks on the water's edge
                 prop = this.loadedModels['dock'].clone();
                 prop.scale.set(3, 3, 3);
                 prop.position.set(28, 0.5, zPos); 
@@ -172,7 +163,6 @@ export class GameEngine {
             this.scene.add(prop);
         }
 
-        // --- 3. LEFT BANK SCENERY (Mostly nature to balance) ---
         for (let i = 0; i < 30; i++) {
             const zPos = -Math.random() * 800;
             const prop = Math.random() > 0.5 ? this.loadedModels['palm'].clone() : this.loadedModels['grass'].clone();
@@ -182,16 +172,12 @@ export class GameEngine {
             this.scene.add(prop);
         }
 
-        // --- 4. OBSTACLES (Barrels) ---
         for (let z = -80; z >= this.goalZ; z -= 80) {
             const barrel = this.loadedModels['barrel'].clone();
             barrel.scale.set(4, 4, 4); 
-
             barrel.position.set((Math.random() - 0.5) * 20, 0, z); 
             this.scene.add(barrel);
-            
             this.obstacles.push(barrel);
-
         }
     }
 
@@ -204,53 +190,66 @@ export class GameEngine {
     update(sensorValue, oxygen, onScoreUpdate) {
         const time = this.clock.getElapsedTime() * 1000;
 
-        // Only run game logic if the boat model has actually loaded
-        if (!this.isGameOver && this.boat.children.length > 0) { 
-            // Breathing Mechanics
-            if (sensorValue > 0 && oxygen > 0) {
-                oxygen = Math.max(0, oxygen - (sensorValue * 0.01));
-                this.boat.position.z -= (sensorValue * 0.015); 
-            } else if (sensorValue < 0) {
-                oxygen = Math.min(100, oxygen + (Math.abs(sensorValue) * 0.02));
-            }
-
-            // Boat bobbing physics
-            this.boat.position.y = Math.sin(time * 0.002) * 0.2;
+        if (this.boat.children.length > 0) { 
+            
+            // 🚨 Boat bobbing physics always runs
+            this.boat.position.y = Math.sin(time * 0.002) * 0.2 + 0.5;
             this.boat.rotation.z = Math.cos(time * 0.001) * 0.03;
             this.boat.rotation.x = Math.sin(time * 0.0015) * 0.03;
 
-            // Collision Check with Barrels
-            for (let i = this.obstacles.length - 1; i >= 0; i--) {
-                const obs = this.obstacles[i];
-                const dist = Math.sqrt(Math.pow(this.boat.position.x - obs.position.x, 2) + Math.pow(this.boat.position.z - obs.position.z, 2));
+            // 🚨 Check if we are PLAYING or in the MENU
+            if (this.gameState === 'PLAYING' && !this.isGameOver) {
+                
+                // Breathing Mechanics
+                if (sensorValue > 0 && oxygen > 0) {
+                    oxygen = Math.max(0, oxygen - (sensorValue * 0.01));
+                    this.boat.position.z -= (sensorValue * 0.015); 
+                } else if (sensorValue < 0) {
+                    oxygen = Math.min(100, oxygen + (Math.abs(sensorValue) * 0.02));
+                }
 
-                if (dist < 4) { 
-                    if (sensorValue > 60) {
-                        this.scene.remove(obs);
-                        this.obstacles.splice(i, 1);
-                        onScoreUpdate(100);
-                    } else {
-                        this.boat.position.z += 0.5; // Bounce back
+                // Collision Check
+                for (let i = this.obstacles.length - 1; i >= 0; i--) {
+                    const obs = this.obstacles[i];
+                    const dist = Math.sqrt(Math.pow(this.boat.position.x - obs.position.x, 2) + Math.pow(this.boat.position.z - obs.position.z, 2));
+
+                    if (dist < 4) { 
+                        if (sensorValue > 60) {
+                            this.scene.remove(obs);
+                            this.obstacles.splice(i, 1);
+                            onScoreUpdate(100);
+                        } else {
+                            this.boat.position.z += 0.5; 
+                        }
                     }
                 }
+
+                // PLAYING CAMERA: Chase the boat
+                const idealOffset = new THREE.Vector3(0, 8, 22).add(this.boat.position);
+                const idealLookAt = new THREE.Vector3(0, 2, -10).add(this.boat.position);
+                this.camera.position.lerp(idealOffset, 0.1);
+                this.camera.lookAt(idealLookAt);
+
+                // Render Minimap only when playing
+                this.minimapCamera.position.set(this.boat.position.x, 100, this.boat.position.z);
+                this.minimapCamera.lookAt(this.boat.position.x, 0, this.boat.position.z);
+                this.mapRenderer.render(this.scene, this.minimapCamera);
+
+            } else if (this.gameState === 'MENU') {
+                
+                // MENU CAMERA: Slowly circle the boat
+                const radius = 25;
+                const camX = this.boat.position.x + Math.sin(time * 0.0003) * radius;
+                const camZ = this.boat.position.z + Math.cos(time * 0.0003) * radius;
+                
+                this.camera.position.set(camX, 8, camZ);
+                this.camera.lookAt(this.boat.position);
             }
         }
 
-        // --- CINEMATIC CHASE CAMERA ---
-        const idealOffset = new THREE.Vector3(0, 8, 22).add(this.boat.position);
-        const idealLookAt = new THREE.Vector3(0, 2, -10).add(this.boat.position);
-        this.camera.position.lerp(idealOffset, 0.1);
-        this.camera.lookAt(idealLookAt);
-
-        // --- MINIMAP CAMERA ---
-        this.minimapCamera.position.set(this.boat.position.x, 100, this.boat.position.z);
-        this.minimapCamera.lookAt(this.boat.position.x, 0, this.boat.position.z);
-
-         // both view will be rendered...on screen
+        // Render main view
         this.renderer.render(this.scene, this.camera);
-        this.mapRenderer.render(this.scene, this.minimapCamera);
         
-
         return { newOxygen: oxygen };
     }
 }
