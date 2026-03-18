@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class GameEngine {
+    
     constructor() {
         // --- 1. SCENE SETUP ---
         this.scene = new THREE.Scene();
@@ -44,6 +45,25 @@ export class GameEngine {
         this.initLighting();
         this.buildBaseEnvironment(); 
         this.preloadAssets();        
+    }
+
+    setMode(modeName) {
+        if (modeName === 'CALM') {
+            this.scene.background.setHex(0x87CEEB); 
+            this.scene.fog.color.setHex(0x87CEEB);
+            this.waveAmplitude = 0.1;
+            this.waveSpeed = 0.001;
+        } else if (modeName === 'RIVER') {
+            this.scene.background.setHex(0x5DADE2); 
+            this.scene.fog.color.setHex(0x5DADE2);
+            this.waveAmplitude = 0.3;
+            this.waveSpeed = 0.002;
+        } else if (modeName === 'STORM') {
+            this.scene.background.setHex(0x2C3E50); 
+            this.scene.fog.color.setHex(0x2C3E50);
+            this.waveAmplitude = 0.8; 
+            this.waveSpeed = 0.004;
+        }
     }
 
     initLighting() {
@@ -193,7 +213,7 @@ export class GameEngine {
         if (this.boat.children.length > 0) { 
             
             // 🚨 Boat bobbing physics always runs
-            this.boat.position.y = Math.sin(time * 0.002) * 0.2 + 0.5;
+            this.boat.position.y = Math.sin(time * this.waveSpeed) * this.waveAmplitude + 0.5;
             this.boat.rotation.z = Math.cos(time * 0.001) * 0.03;
             this.boat.rotation.x = Math.sin(time * 0.0015) * 0.03;
 
@@ -246,6 +266,7 @@ export class GameEngine {
                 this.camera.lookAt(this.boat.position);
             }
         }
+        
 
         // Render main view
         this.renderer.render(this.scene, this.camera);

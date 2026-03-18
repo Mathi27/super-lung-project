@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Lung Hero - Final Prototype</title>
+    <title>Super Lung Hero</title>
     <style>
         /* --- CSS RESET & FONTS --- */
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
         body { margin: 0; overflow: hidden; font-family: 'Montserrat', sans-serif; background-color: #87CEEB; }
         
-        /* 🚨 CRITICAL FIX: The 3D Canvas MUST stay in the back */
+        /* CRITICAL FIX: The 3D Canvas MUST stay in the back */
         #game-canvas { position: absolute; top: 0; left: 0; z-index: 1; width: 100vw; height: 100vh; }
 
         /* --- MAIN MENU --- */
@@ -37,6 +37,52 @@
         }
         #btn-play.ready:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(58,123,213,0.6); }
 
+        /* --- PROJECT INFO NOTE (NEW) --- */
+        #info-note {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(20, 30, 48, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px 25px;
+            border-radius: 12px;
+            width: 320px;
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            text-align: left;
+            z-index: 210;
+        }
+        #info-note h3 {
+            color: #f1c40f;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
+        #info-note p {
+            font-size: 12px;
+            color: #ccc;
+            line-height: 1.6;
+            margin: 0 0 10px 0;
+            font-weight: normal;
+        }
+        #info-note .initiative-tag {
+            color: #3498db;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #close-note {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            cursor: pointer;
+            font-size: 20px;
+            color: #888;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+        #close-note:hover { color: #e74c3c; }
+
         /* --- IN-GAME HUD --- */
         #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; display: none; pointer-events: none; }
         
@@ -46,6 +92,21 @@
         }
         #oxy-bar-bg { width: 200px; height: 20px; background: #333; border: 2px solid white; border-radius: 5px; overflow: hidden;}
         #oxy-bar { width: 0%; height: 100%; background: cyan; transition: width 0.1s; }
+
+        /* GTA MINIMAP CSS */
+        #minimap-container {
+            position: absolute; bottom: 30px; left: 30px;
+            width: 200px; height: 200px; border-radius: 50%;
+            overflow: hidden; border: 4px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6); background-color: #1a1a1a;
+            z-index: 100;
+        }
+        #minimap-container canvas { display: block; border-radius: 50%; }
+        .map-marker.N {
+            position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+            color: #e74c3c; font-weight: 900; z-index: 110;
+            text-shadow: 1px 1px 2px black, 0 0 5px rgba(255,0,0,0.5); font-size: 18px;
+        }
 
         #sensor-ui {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -60,11 +121,20 @@
     <canvas id="game-canvas"></canvas>
 
     <div id="main-menu">
+        
         <div class="menu-box">
             <h1>SUPER LUNG HERO</h1>
             <p>Digital Respiratory Rehab</p>
             <button id="btn-play">LOADING ASSETS...</button>
         </div>
+
+        <div id="info-note">
+            <span id="close-note">✖</span>
+            <h3>SUPER LUNG HERO</h3>
+            <p>Game-Based Digital Respiratory Training Intervention on Inspiratory Capacity in Post-Operative Cardiopulmonary Patients.</p>
+            <div class="initiative-tag">An Initiative</div>
+        </div>
+
     </div>
 
     <div id="game-ui">
@@ -72,6 +142,11 @@
             <h2 style="margin:0 0 10px 0; color:#f1c40f;">SCORE: <span id="score">0</span></h2>
             <div id="oxy-bar-bg"><div id="oxy-bar"></div></div>
         </div>
+
+        <div id="minimap-container">
+            <div class="map-marker N">N</div>
+        </div>
+        
         <div id="sensor-ui">
             <div style="display:flex; justify-content:space-between; font-weight:bold; color:#333; margin-bottom:10px;">
                 <span style="color:#3498db;">⬅ INHALE</span><span style="color:#e74c3c;">EXHALE ➡</span>
@@ -106,6 +181,13 @@
         const slider = document.getElementById('breath-slider');
         const oxyBar = document.getElementById('oxy-bar');
         const scoreText = document.getElementById('score');
+        
+        // Note Close Button Logic
+        const infoNote = document.getElementById('info-note');
+        const closeNote = document.getElementById('close-note');
+        closeNote.addEventListener('click', () => {
+            infoNote.style.display = 'none';
+        });
 
         // --- THREE.JS SETUP ---
         const canvas = document.getElementById('game-canvas');
@@ -120,6 +202,14 @@
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         const clock = new THREE.Clock();
+
+        const mapSize = 150; 
+        const minimapCamera = new THREE.OrthographicCamera(mapSize / -2, mapSize / 2, mapSize / 2, mapSize / -2, 1, 1000);
+        scene.add(minimapCamera);
+
+        const mapRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        mapRenderer.setSize(200, 200); 
+        document.getElementById('minimap-container').appendChild(mapRenderer.domElement);
 
         // --- LIGHTING & ENVIRONMENT ---
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
@@ -144,6 +234,7 @@
         leftBank.rotation.x = -Math.PI / 2; leftBank.position.set(-130, 0.2, -500); leftBank.receiveShadow = true;
         scene.add(leftBank);
 
+        
         // --- ASSET LOADER ---
         const gltfLoader = new GLTFLoader();
         const loadedModels = {};
@@ -166,7 +257,6 @@
                 loadedModels[item.id] = model;
                 loadedCount++;
 
-                // When everything is loaded, build the world and unlock the PLAY button
                 if (loadedCount === filesToLoad.length) {
                     buildWorld();
                     btnPlay.innerText = "START MISSION";
@@ -177,13 +267,11 @@
         });
 
         function buildWorld() {
-            // 1. Setup Boat
             boatModel = loadedModels['boat'].clone();
             boatModel.scale.set(4, 4, 4);
-            boatModel.rotation.y = Math.PI; // Face forward
+            boatModel.rotation.y = Math.PI; 
             scene.add(boatModel);
 
-            // 2. Right Bank Scenery
             for (let i = 0; i < 40; i++) {
                 const zPos = -Math.random() * 800;
                 const rand = Math.random();
@@ -197,7 +285,6 @@
                 scene.add(prop);
             }
 
-            // 3. Left Bank Scenery
             for (let i = 0; i < 30; i++) {
                 const prop = Math.random() > 0.5 ? loadedModels['palm'].clone() : loadedModels['grass'].clone();
                 prop.scale.set(3.5, 3.5, 3.5);
@@ -205,7 +292,6 @@
                 scene.add(prop);
             }
 
-            // 4. Obstacles
             for (let z = -80; z >= -600; z -= 80) {
                 const barrel = loadedModels['barrel'].clone();
                 barrel.scale.set(4, 4, 4);
@@ -215,9 +301,8 @@
             }
         }
 
-        // --- BUTTON LISTENER ---
         btnPlay.addEventListener('click', () => {
-            if (!btnPlay.classList.contains("ready")) return; // Prevent clicks if not loaded
+            if (!btnPlay.classList.contains("ready")) return; 
             
             mainMenu.style.opacity = '0';
             setTimeout(() => {
@@ -233,25 +318,22 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- RENDER LOOP ---
+        // --- FIXED RENDER LOOP ---
         function animate() {
             requestAnimationFrame(animate);
             const time = clock.getElapsedTime();
             const sensorVal = parseInt(slider.value);
 
-            if (boatModel) { // Only animate if boat is loaded
-                // Boat Bobbing
+            if (boatModel) { 
                 boatModel.position.y = Math.sin(time * 2) * 0.15 + 0.5;
                 boatModel.rotation.z = Math.cos(time * 1) * 0.03;
                 boatModel.rotation.x = Math.sin(time * 1.5) * 0.03;
 
                 if (gameState === 'MENU') {
-                    // Cinematic rotation
                     camera.position.set(boatModel.position.x + Math.sin(time * 0.5) * 20, 8, boatModel.position.z + Math.cos(time * 0.5) * 20);
                     camera.lookAt(boatModel.position);
                 } 
                 else if (gameState === 'PLAYING') {
-                    // Mechanics
                     if (sensorVal > 0 && oxygen > 0) {
                         oxygen -= sensorVal * 0.01;
                         boatModel.position.z -= sensorVal * 0.02;
@@ -263,7 +345,6 @@
                     
                     if (Math.abs(sensorVal) > 0) slider.value = sensorVal > 0 ? sensorVal - 1 : sensorVal + 1;
 
-                    // Collision Detection
                     for (let i = obstacles.length - 1; i >= 0; i--) {
                         const obs = obstacles[i];
                         const dist = Math.sqrt(Math.pow(boatModel.position.x - obs.position.x, 2) + Math.pow(boatModel.position.z - obs.position.z, 2));
@@ -275,16 +356,19 @@
                                 score += 100;
                                 scoreText.innerText = score;
                             } else {
-                                boatModel.position.z += 0.5; // Bump back
+                                boatModel.position.z += 0.5;
                             }
                         }
                     }
 
-                    // Chase Camera
                     const idealPos = new THREE.Vector3(0, 8, 20).add(boatModel.position);
                     const idealLook = new THREE.Vector3(0, 2, -10).add(boatModel.position);
                     camera.position.lerp(idealPos, 0.1);
                     camera.lookAt(idealLook);
+
+                    minimapCamera.position.set(boatModel.position.x, 100, boatModel.position.z);
+                    minimapCamera.lookAt(boatModel.position.x, 0, boatModel.position.z);
+                    mapRenderer.render(scene, minimapCamera);
                 }
             }
 
