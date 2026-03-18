@@ -1,48 +1,82 @@
 import { GameEngine } from './GameEngine.js';
+import { MicInput } from './MicInput.js';  
 
-// Game State
 let oxygen = 0;
 let score = 0;
 
-// DOM Elements
+// UI DOM Elements
+const mainMenu = document.getElementById('main-menu');
+const gameUI = document.getElementById('game-ui');
+const btnPlay = document.getElementById('btn-play');
+const btnSettings = document.getElementById('btn-settings');
+
+// Game DOM Elements
 const slider = document.getElementById('breath-slider');
 const oxyBar = document.getElementById('oxy-bar');
 const scoreText = document.getElementById('score');
-const winScreen = document.getElementById('mission-complete');
 
 // Initialize 3D Engine
 const game = new GameEngine();
+const mic = new MicInput();
 
-// Handle Window Resizing
 window.addEventListener('resize', () => game.resize());
 
-// Callbacks for Engine events
+// --- BUTTON LISTENERS ---
+btnPlay.addEventListener('click', async () => {
+    // 🚨 SAFETY CHECK: Don't let them play if the boat hasn't loaded!
+    if (game.boat.children.length === 0) {
+        alert("Assets are still loading... Please wait a moment.");
+        return;
+    }
+
+    
+    btnPlay.innerText = "CONNECTING MIC...";
+    const hasMic = await mic.init();
+    if(hasMic){
+        mainMenu.style.opacity = '0';
+            setTimeout(() => {
+        mainMenu.style.display = 'none';
+        gameUI.style.display = 'block'; 
+        game.gameState = 'PLAYING'; 
+    }, 500); 
+    }else{
+        btnPlay.innerText = "MIC FAILED";
+    }
+
+});
+
+btnSettings.addEventListener('click', () => {
+    alert("Settings menu coming soon!");
+});
+
+// --- GAME LOOP ---
 function addScore(points) {
     score += points;
     scoreText.innerText = score;
 }
 
-function handleWin() {
-    winScreen.style.display = 'block';
-    slider.disabled = true;
-}
-
-// Main Game Loop
 function animate() {
     requestAnimationFrame(animate);
 
-    const sensorValue = parseInt(slider.value);
-    
-    // Update game engine and get returned state
-    const result = game.update(sensorValue, oxygen, addScore, handleWin);
-    oxygen = result.newOxygen;
+if (game.boat.children.length > 0 && game.gameState === 'PLAYING') {
+        
+        // --- NEW: Read from Microphone instead of Slider ---
+        const micVolume = mic.getVolume(); 
+        
+        // Threshold: If volume is high (> 20), treat as EXHALE. If low, treat as INHALE.
+        let breathForce = 0;
+        if (micVolume > 20) {
+            breathForce = micVolume; // Exhale (Positive force to move boat)
+        } else {
+            breathForce = -30; // Inhale (Negative force to charge oxygen)
+        }
+        
+        const result = game.update(breathForce, oxygen, (pts) => score += pts);
+        oxygen = result.newOxygen;
 
-    // Update UI
-    oxyBar.style.width = `${oxygen}%`;
-    
-    // Auto-return slider to 0 to simulate resting state if not interacted with
-    if (Math.abs(sensorValue) > 0) {
-        slider.value = sensorValue > 0 ? sensorValue - 1 : sensorValue + 1;
+        oxyBar.style.width = `${oxygen}%`;
+    } else {
+        game.renderer.render(game.scene, game.camera);
     }
 }
 

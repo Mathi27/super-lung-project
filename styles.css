@@ -3,15 +3,110 @@
 body {
     margin: 0;
     overflow: hidden;
-    font-family: 'Montserrat', sans-serif; /* Clean, bold game font */
+    font-family: 'Montserrat', sans-serif;
     background-color: #87CEEB;
 }
 
+/* 🚨 CRITICAL FIX: Force the main 3D canvas to the absolute background */
+canvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1; /* Lowest layer */
+}
+
+/* Prevent the minimap canvas from stretching full screen */
+#minimap-container canvas {
+    position: relative;
+    z-index: 2;
+}
+
+
+/* --- MAIN MENU STYLES --- */
+#main-menu {
+    position: absolute;
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh;
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px); /* Frosted glass effect */
+    z-index: 200; /* Highest layer so it covers everything */
+    transition: opacity 0.5s ease;
+}
+
+.menu-content {
+    background: rgba(20, 30, 48, 0.85);
+    padding: 60px 80px; 
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    text-align: center; 
+    color: white;
+}
+
+.menu-content h1 { 
+    font-size: 52px; 
+    margin: 0 0 5px 0; 
+    color: #f1c40f; 
+    letter-spacing: 4px; 
+    text-shadow: 2px 2px 0px rgba(0,0,0,0.8); 
+}
+
+.menu-content p { 
+    font-size: 18px; 
+    margin-bottom: 50px; 
+    color: #a0b0c0; 
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.menu-buttons button {
+    display: block; 
+    width: 100%; 
+    padding: 18px; 
+    margin-bottom: 20px;
+    font-size: 20px; 
+    font-family: 'Montserrat', sans-serif; 
+    font-weight: 800;
+    color: white; 
+    border: none; 
+    border-radius: 12px; 
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#btn-play {
+    background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+    box-shadow: 0 5px 15px rgba(58, 123, 213, 0.4);
+}
+
+#btn-play:hover { 
+    transform: translateY(-3px) scale(1.02); 
+    box-shadow: 0 15px 25px rgba(58, 123, 213, 0.6); 
+}
+
+#btn-settings { 
+    background: rgba(255,255,255,0.1); 
+    border: 1px solid rgba(255,255,255,0.2); 
+}
+
+#btn-settings:hover { 
+    background: rgba(255,255,255,0.2); 
+    transform: translateY(-3px);
+}
+
+
+/* --- IN-GAME HUD LAYERS --- */
 #ui-layer {
     position: absolute;
     top: 20px;
     left: 20px;
-    z-index: 10;
+    z-index: 100;
 }
 
 #stats-panel {
@@ -65,7 +160,7 @@ body {
     border: 4px solid rgba(255, 255, 255, 0.9);
     box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     background-color: #1a1a1a;
-    z-index: 10;
+    z-index: 100;
 }
 
 .map-marker.N {
@@ -75,7 +170,7 @@ body {
     transform: translateX(-50%);
     color: red;
     font-weight: bold;
-    z-index: 20;
+    z-index: 110;
     text-shadow: 1px 1px 2px black;
 }
 
@@ -89,17 +184,11 @@ body {
     padding: 15px 30px;
     border-radius: 30px;
     width: 400px;
-    z-index: 10;
+    z-index: 100;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
 
-.labels {
-    display: flex;
-    justify-content: space-between;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-
+.labels { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 10px; }
 .inhale { color: #3498db; }
 .exhale { color: #e74c3c; }
 #breath-slider { width: 100%; cursor: pointer; }
